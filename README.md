@@ -1,4 +1,4 @@
-# nim-stack-strings
+# Nim `stack_strings` Module
 
 The `stack_strings` module provides a string implementation that works with 100% stack memory.
 
