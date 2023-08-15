@@ -9,3 +9,7 @@ If you use `--mm:arc` and `-d:useMalloc` in tandem with this module, your progra
 
 To generate documentation, clone this repository and then run `nimble docgen`.
 The generated HTML docs will be available in the `docs` directory in the project root.
+
+# Nim Version Support
+
+Only Nim `2.0.0`+ is supported because the module takes advantage of various type system improvements introduced in `2.0.0`.
