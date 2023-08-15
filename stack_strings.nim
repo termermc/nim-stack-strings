@@ -165,7 +165,7 @@ func toString*(this: sink StackString): string =
     for c in this.items:
         result.add(c)
 
-func `$`*(this: StackString): string {.inline.} =
+func `$`*(this: sink StackString): string {.inline.} =
     ## Converts the [StackString] to a `string`.
     ## Note that this proc allocates a new string and copies the contents of the StackString into the newly created string.
     ## 
@@ -184,7 +184,7 @@ func `$`*(this: StackString): string {.inline.} =
 
     return this.toString()
 
-func ss*(str: static string): static auto =
+func ss*(str: sink static string): static auto =
     ## Creates a [StackString] object from a static string.
     ## The [StackString]'s capacity will be the string's actual length.
     runnableExamples:
