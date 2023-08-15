@@ -96,7 +96,7 @@ This template does not copy any memory.
 
 # Using `StackString` with the `unicode` Module
 
-The stdlib's `unicode` module supports `openArray[char]`, so all you have to do to use [StackString] with it is to use the [toOpenArray] proc first.
+The stdlib's `unicode` module supports `openArray[char]`, so all you have to do to use [StackString] with it is to use the [toOpenArray] template first.
 
 ]##
 
