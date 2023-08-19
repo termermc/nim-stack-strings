@@ -177,8 +177,7 @@ func `$`*(this: StackString): string {.inline.} =
     when stackStringsPreventAllocation:
         {.fatal: "The `$` proc can allocate memory at runtime, see `stackStringsPreventAllocation`".}
 
-    {.suppress: "XDeclaredButNotUsed".}
-    const errMsg = "Conversion of StackString to string with `$` proc. If this was intentional, use `toString` instead."
+    const errMsg {.used.} = "Conversion of StackString to string with `$` proc. If this was intentional, use `toString` instead."
     when fatalOnStackStringDollar:
         {.fatal: errMsg.}
     when warnOnStackStringDollar:
@@ -857,5 +856,5 @@ proc toHeapCstring*(this: StackString): cstring {.inline.} =
     # We don't need a zeroed block of memory because we'll be overwriting it manually
     result = cast[cstring](createU(char, len + 1))
 
-    moveMem(addr result[0], addr this.data[0], len)
+    moveMem(result, addr this.data[0], len)
     result[len] = '\x00'

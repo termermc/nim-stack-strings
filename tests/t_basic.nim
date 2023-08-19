@@ -17,12 +17,12 @@ test "Random tests":
     # The string will be truncated, and the truncated data will be overwritten with zeros
     str1.unsafeSetLen(5)
     check str1 == "Hello"
-    check str1.data == ['H', 'e', 'l', 'l', 'o', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00']
+    check str1.data == ['H', 'e', 'l', 'l', 'o', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00']
 
     # If we're sure it's safe to skip overwriting the truncated data with zeros, we can disable it
     str2.unsafeSetLen(2, writeZerosOnTruncate = false)
     check str2 == "Hi"
-    check str2.data == ['H', 'i', ' ', 'w', 'o', 'r', 'l', 'd']
+    check str2.data == ['H', 'i', ' ', 'w', 'o', 'r', 'l', 'd', '\0']
 
     # It works with BackwardsIndex, too
     str3.unsafeSetLen(^1)
@@ -35,3 +35,5 @@ test "Random tests":
 
     str1.unsafeSet(5, 'a')
     check str1.unsafeGet(5) == 'a'
+    discard $str1
+
