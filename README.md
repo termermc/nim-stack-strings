@@ -7,6 +7,8 @@ If you use `--mm:arc` and `-d:useMalloc` in tandem with this module, your progra
 
 # Documentation
 
+You can view the latest documentation online [here](https://docs.termer.net/nim/stack_strings/).
+
 To generate documentation, clone this repository and then run `nimble docgen`.
 The generated HTML docs will be available in the `docs` directory in the project root.
 
