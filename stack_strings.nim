@@ -9,6 +9,8 @@ If you use `--mm:arc` and `-d:useMalloc` in tandem with this module, your progra
 The [StackString] type is an object with a fixed size buffer and an integer to store its current length.
 It works very similarly to `string`, but its internal buffer cannot be resized, and must be known at compile time.
 
+Note that like Nim and C strings, [StackString] is nil-terminated, so its internal buffer size will be your specified size + 1.
+
 To create an empty [StackString], use the [stackStringOfCap] proc:
 
 ]##
@@ -120,7 +122,7 @@ type InsufficientCapacityDefect* = object of Defect
     requestedCapacity*: Natural
         ## The capacity required to successfully complete the operation
 
-func newInsufficientCapacityDefect*(msg: string, capacity: Natural, requestedCapacity: Natural): ref InsufficientCapacityDefect =
+proc newInsufficientCapacityDefect*(msg: string, capacity: Natural, requestedCapacity: Natural): ref InsufficientCapacityDefect =
     ## Allocates a new [InsufficientCapacityDefect] relating to the specified [StackString]
 
     result = new InsufficientCapacityDefect
@@ -143,14 +145,14 @@ type StackString*[Size: static Natural] = object
     lenInternal: Natural
         ## The current string length
 
-    data*: array[Size, char]
+    data*: array[Size + 1, char]
         ## The underlying string data.
         ## If you just want to iterate over the string's characters, use the [items] iterator.
 
-type IndexableChars* = string | openArray[char] | StackString
+type IndexableChars* = cstring | string | openArray[char] | StackString
     ## Indexable data types that contain chars
 
-func toString*(this: sink StackString): string =
+func toString*(this: StackString): string =
     ## Allocates a new string with the content of the provided [StackString].
     ## Note that this will allocate heap memory and copy the [StackString]'s content.
     ## 
@@ -165,7 +167,7 @@ func toString*(this: sink StackString): string =
     for c in this.items:
         result.add(c)
 
-func `$`*(this: sink StackString): string {.inline.} =
+func `$`*(this: StackString): string {.inline.} =
     ## Converts the [StackString] to a `string`.
     ## Note that this proc allocates a new string and copies the contents of the StackString into the newly created string.
     ## 
@@ -184,7 +186,7 @@ func `$`*(this: sink StackString): string {.inline.} =
 
     return this.toString()
 
-func ss*(str: sink static string): static auto =
+func ss*(str: static string): static auto =
     ## Creates a [StackString] object from a static string.
     ## The [StackString]'s capacity will be the string's actual length.
     runnableExamples:
@@ -192,7 +194,7 @@ func ss*(str: sink static string): static auto =
 
         doAssert name is StackString[8]
 
-    var data: array[str.len, char]
+    var data: array[str.len + 1, char]
 
     for i in 0 ..< str.len:
         data[i] = str[i]
@@ -208,7 +210,7 @@ func stackStringOfCap*(capacity: static Natural): static auto =
         doAssert str is StackString[10]
         doAssert str.len == 0
     
-    return StackString[capacity](lenInternal: 0, data: array[capacity, char].default)
+    return StackString[capacity](lenInternal: 0, data: array[capacity + 1, char].default)
 
 func len*(this: StackString): Natural {.inline.} =
     ## The current string length
@@ -239,9 +241,9 @@ func capacity*(this: StackString): Natural {.inline.} =
         doAssert extraCap.capacity == 10
         doAssert extraCap.len == 2
 
-    return this.data.len
+    return this.data.len - 1
 
-iterator items*(this: StackString): char =
+iterator items*(this: StackString): char {.inline.} =
     ## Iterates over each char in the [StackString]
     runnableExamples:
         let str = ss"abc"
@@ -253,10 +255,32 @@ iterator items*(this: StackString): char =
 
         doAssert chars == @['a', 'b', 'c']
 
-    for i in 0 ..< this.len:
+    var i = 0
+    let strLen = this.len
+    while i < strLen:
         yield this.data[i]
+        inc i
 
-iterator pairs*(this: StackString): (int, char) =
+iterator mitems*(this: var StackString): var char {.inline.} =
+    ## Iterates over each char in the [StackString], returning a mutable reference
+    runnableExamples:
+        var str = ss"fly in the sky"
+
+        for c in str.mitems:
+            if c == 'f':
+                c = 's'
+            elif c == 'k':
+                c = 't'
+
+        doAssert str == "sly in the sty"
+
+    var i = 0
+    let strLen = this.len
+    while i < strLen:
+        yield this.data[i]
+        inc i
+
+iterator pairs*(this: StackString): (int, char) {.inline.} =
     ## Iterates over each index-char pairs in the [StackString]
     runnableExamples:
         let str = ss"abc"
@@ -269,8 +293,28 @@ iterator pairs*(this: StackString): (int, char) =
         doAssert strPairs[0] == (0, 'a')
         doAssert strPairs[^1] == (2, 'c')
 
-    for i in 0 ..< this.len:
+    var i = 0
+    let strLen = this.len
+    while i < strLen:
         yield (i, this.data[i])
+        inc i
+
+iterator mpairs*(this: var StackString): (int, var char) {.inline.} =
+    ## Iterates over each index-char pairs in the [StackString], returning a mutable reference to the char
+    runnableExamples:
+        var str = ss"ooo"
+
+        for (i, c) in str.mpairs:
+            if i == 0 or i == 2:
+                c = 'l'
+
+        doAssert str == "lol"
+
+    var i = 0
+    let strLen = this.len
+    while i < strLen:
+        yield (i, this.data[i])
+        inc i
 
 {.boundChecks: off.}
 func `[]`*(this: StackString, i: Natural | BackwardsIndex): char {.inline, raises: [IndexDefect].} =
@@ -278,19 +322,20 @@ func `[]`*(this: StackString, i: Natural | BackwardsIndex): char {.inline, raise
     runnableExamples:
         let str = ss"Hello world"
 
-        doAssert str[0] == 'H'
         doAssert str[^1] == 'd'
 
     when stackStringsPreventAllocation:
         {.fatal: "The `[]` proc can allocate memory at runtime, see `stackStringsPreventAllocation`".}
 
+    let idx = when i is BackwardsIndex:
+        this.len - i.int
+    else:
+        i
+
     # Do bounds check manually because the StackString's len field is the actual bound we want to check, not data.len
     when not defined(danger):
-        let cond = when i is BackwardsIndex:
-            i.int > this.len or i.int < 1
-        else:
-            i >= this.len or i < 0
-
+        let cond = idx >= this.len or idx < 0
+        
         if unlikely(cond):
             if this.len == 0:
                 raise newException(IndexDefect, "index out of bounds, the container is empty")
@@ -302,10 +347,46 @@ func `[]`*(this: StackString, i: Natural | BackwardsIndex): char {.inline, raise
 
                 raise newException(IndexDefect, "index " & $idx & " not in 0 .. " & $this.high)
 
-    return this.data[i]
+    return this.data[idx]
 {.boundChecks: on.}
 
-# An implementation of `[]` that accept HSlice is not implemented because there is no easy way to return a slice without allocating heap memory
+template `[]`*(this: StackString, slice: HSlice): openArray[char] =
+    ## Returns an `openArray` for the specified range in the [StackString], or raises `RangeDefect` if the range is invalid.
+    ## The returned range is a reference to the original [StackString] `data` memory.
+    ## 
+    ## If you want to use the `openArray` value as an actual value that can be stored in a variable,
+    ## you need to enable the experimental `views` feature.
+    runnableExamples:
+        {.experimental: "views".}
+
+        let str = ss"Hello world"
+
+        let part = str[0..4]
+
+        doAssert part == ['H', 'e', 'l', 'l', 'o']
+        doAssert cast[pointer](addr part[0]) == cast[pointer](addr str.data[0])
+
+    when stackStringsPreventAllocation:
+        {.fatal: "The `[]` template can allocate memory at runtime, see `stackStringsPreventAllocation`".}
+
+    let a = slice.a
+    let b = slice.b
+
+    # Do bounds check manually because the StackString's len field is the actual bound we want to check, not data.len
+    when not defined(danger):
+        let cond = (
+            a > b or
+            a >= this.len or a < 0 or
+            b >= this.len or b < 0
+        )
+        
+        if unlikely(cond):
+            if this.len == 0:
+                raise newException(RangeDefect, "range out of bounds, the container is empty")
+            else:
+                raise newException(RangeDefect, "range " & $a & ".." & $b & " not in 0 .. " & $this.high)
+
+    this.data.toOpenArray(a, b)
 
 {.boundChecks: off.}
 func tryGet*(this: StackString, i: Natural | BackwardsIndex): Option[char] =
@@ -338,8 +419,8 @@ func tryGet*(this: StackString, i: Natural | BackwardsIndex): Option[char] =
 func unsafeGet*(this: StackString, i: Natural | BackwardsIndex): char {.inline.} =
     ## Returns the character at the specified index in the [StackString].
     ## 
-    ## Performs no bounds checks whatsoever; use only if you're 100% sure your index won't extend beyond the [StackString]'s capacity.
-    ## Since no checks are performed, you can read past the [StackString]'s length, but reading past its capacity is undefined behavior and may crash.
+    ## Performs no bounds checks whatsoever; use only if you're 100% sure your index won't extend beyond the [StackString]'s capacity + its nil terminator.
+    ## Since no checks are performed, you can read past the [StackString]'s length, but reading past its capacity + its nil terminator is undefined behavior and may crash.
     ## In most cases, you'll be reading zeros past the [StackString]'s length, unless you used `setLen` with `writeZerosOnTruncate` set to `false`.
     let idx = when i is BackwardsIndex:
         this.len - i.int
@@ -361,12 +442,14 @@ func `[]=`*(this: var StackString, i: Natural | BackwardsIndex, value: char) {.i
     when stackStringsPreventAllocation:
         {.fatal: "The `[]=` proc can allocate memory at runtime, see `stackStringsPreventAllocation`".}
 
+    let idx = when i is BackwardsIndex:
+        this.len - i.int
+    else:
+        i
+
     # Do bounds check manually because the StackString's len field is the actual bound we want to check, not data.len
     when not defined(danger):
-        let cond = when i is BackwardsIndex:
-            i.int > this.len or i.int < 1
-        else:
-            i >= this.len or i < 0
+        let cond = idx >= this.len or idx < 0
 
         if unlikely(cond):
             if this.len == 0:
@@ -379,7 +462,7 @@ func `[]=`*(this: var StackString, i: Natural | BackwardsIndex, value: char) {.i
 
                 raise newException(IndexDefect, "index " & $idx & " not in 0 .. " & $this.high)
 
-    this.data[i] = value
+    this.data[idx] = value
 {.boundChecks: on.}
 
 {.boundChecks: off.}
@@ -404,6 +487,7 @@ func unsafeSet*(this: var StackString, i: Natural | BackwardsIndex, value: char)
     ## 
     ## Performs no bounds checks whatsoever; use only if you're 100% sure your index won't extend beyond the [StackString]'s capacity.
     ## Since no checks are performed, you can write past the [StackString]'s length, but writing past its capacity is undefined behavior and may crash.
+    ## Overwriting the [StackString]'s nil terminator will make the string unusable when interopping with C.
     let idx = when i is BackwardsIndex:
         this.len - i.int
     else:
@@ -632,15 +716,17 @@ proc setLen*(this: var StackString, newLen: Natural | BackwardsIndex, writeZeros
         var str2 = ss"Hi world"
         var str3 = ss"abc"
 
+        # Note that all [StackString] objects' data are nil-terminated
+
         # The string will be truncated, and the truncated data will be overwritten with zeros
         str1.setLen(5)
         doAssert str1 == "Hello"
-        doAssert str1.data == ['H', 'e', 'l', 'l', 'o', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00']
+        doAssert str1.data == ['H', 'e', 'l', 'l', 'o', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00']
 
         # If we're sure it's safe to skip overwriting the truncated data with zeros, we can disable it
         str2.setLen(2, writeZerosOnTruncate = false)
         doAssert str2 == "Hi"
-        doAssert str2.data == ['H', 'i', ' ', 'w', 'o', 'r', 'l', 'd']
+        doAssert str2.data == ['H', 'i', ' ', 'w', 'o', 'r', 'l', 'd', '\x00']
 
         # It works with BackwardsIndex, too
         str3.setLen(^1)
@@ -662,14 +748,14 @@ proc setLen*(this: var StackString, newLen: Natural | BackwardsIndex, writeZeros
     
     this.unsafeSetLen(newLen, writeZerosOnTruncate)
 
-func findChar*(this: StackString, c: char): int {.inline.} =
+func find*(this: StackString, c: char): int {.inline.} =
     ## Finds the index of the specified char in the [StackString], or returns `-1` if the char was not found
     runnableExamples:
         let str = ss"abcdef"
 
-        doAssert str.findChar('c') == 2
-        doAssert str.findChar('f') == 5
-        doAssert str.findChar('z') == -1
+        doAssert str.find('c') == 2
+        doAssert str.find('f') == 5
+        doAssert str.find('z') == -1
     
     for i in 0 ..< this.len:
         if unlikely(this.data[i] == c):
@@ -677,27 +763,27 @@ func findChar*(this: StackString, c: char): int {.inline.} =
     
     return -1
 
-func containsChar*(this: StackString, c: char): bool {.inline.} =
+func contains*(this: StackString, c: char): bool {.inline.} =
     ## Returns whether the specified char can be found within the [StackString]
     runnableExamples:
         let str = ss"abcdef"
 
-        doAssert str.containsChar('c') == true
-        doAssert str.containsChar('f') == true
-        doAssert str.containsChar('z') == false
+        doAssert str.contains('c') == true
+        doAssert str.contains('f') == true
+        doAssert str.contains('z') == false
     
-    return this.findChar(c) != -1
+    return this.find(c) != -1
 
-func findSubstr*(this: StackString, substr: StackString | string | IndexableChars): int {.inline.} =
+func find*(this: StackString, substr: StackString | string | IndexableChars): int {.inline.} =
     ## Finds the index of the specified substring in the [StackString], or returns `-1` if the substring was not found
     runnableExamples:
         let str = ss"abcdef"
 
-        doAssert str.findSubstr("cde") == 2
-        doAssert str.findSubstr("def") == 3
-        doAssert str.findSubstr("f") == 5
-        doAssert str.findSubstr("abd") == -1
-        doAssert str.findSubstr("zef") == -1
+        doAssert str.find("cde") == 2
+        doAssert str.find("def") == 3
+        doAssert str.find("f") == 5
+        doAssert str.find("abd") == -1
+        doAssert str.find("zef") == -1
     
     if this.len < substr.len:
         return -1
@@ -714,21 +800,62 @@ func findSubstr*(this: StackString, substr: StackString | string | IndexableChar
     # Didn't already return index, so no match was found
     return -1
 
-func containsSubstr*(this: StackString, substr: StackString | string | IndexableChars): bool {.inline.} =
+func contains*(this: StackString, substr: StackString | string | IndexableChars): bool {.inline.} =
     ## Returns whether the specified substring can be found within the [StackString]
     runnableExamples:
         let str = ss"abcdef"
 
-        doAssert str.containsSubstr("cde") == true
-        doAssert str.containsSubstr("def") == true
-        doAssert str.containsSubstr("f") == true
-        doAssert str.containsSubstr("abd") == false
-        doAssert str.containsSubstr("zef") == false
+        doAssert str.contains("cde") == true
+        doAssert str.contains("def") == true
+        doAssert str.contains("f") == true
+        doAssert str.contains("abd") == false
+        doAssert str.contains("zef") == false
     
-    return this.findSubstr(substr) != -1
+    return this.find(substr) != -1
 
 template toOpenArray*(this: StackString): untyped =
     ## Converts the [StackString] to `openArray[char]`.
     ## Thanks to ElegantBeef for help on this template.
     
     this.data.toOpenArray(0, this.len)
+
+template toCstring*(this: StackString): cstring =
+    ## Converts the [StackString] to `cstring`.
+    ## Note that no memory copying is done; this simply casts the [StackString]'s `data` to cstring.
+    ## 
+    ## There are a few implications to this:
+    ##  - The reference will only live as long as its scope; use [toHeapCstring] if you want a heap-allocated cstring
+    ##  - If you used [setLen] with `writeZerosOnTruncate` set to `false`, the content of the cstring will include the truncated part of the string
+    runnableExamples:
+        let str = ss"Hello world"
+        let cstr = str.toCstring()
+
+        doAssert cstr == "Hello world"
+        doAssert cast[pointer](cstr) == addr str.data[0]
+    
+    cast[cstring](addr this.data[0])
+
+proc toHeapCstring*(this: StackString): cstring {.inline.} =
+    ## Allocates a `cstring` on the heap and copies the contents of the [StackString] into it.
+    ## The `cstring` is a pointer to heap memory which must be freed manually by the caller using `dealloc`.
+    ## If you just want to get the [StackString]'s `data` stack pointer as a `cstring`, use `toCstring` instead.
+    runnableExamples:
+        let str = ss"Hello world"
+        let cstr = str.toHeapCstring()
+
+        doAssert cstr == "Hello world"
+        doAssert cast[pointer](cstr) != addr str.data[0]
+
+        # You need to deallocate the cstring when you're done with it
+        dealloc(cstr)
+
+    when stackStringsPreventAllocation:
+        {.fatal: "The `toHeapCstring` proc can allocate memory at runtime, see `stackStringsPreventAllocation`".}
+
+    let len = this.len
+
+    # We don't need a zeroed block of memory because we'll be overwriting it manually
+    result = cast[cstring](createU(char, len + 1))
+
+    moveMem(addr result[0], addr this.data[0], len)
+    result[len] = '\x00'

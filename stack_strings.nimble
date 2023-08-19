@@ -11,4 +11,17 @@ license       = "MIT"
 requires "nim >= 2.0.0"
 
 task docgen, "Generates documentation into the \"docs\" directory":
-    exec "nim doc --git.url:https://github.com/termermc/nim-stack-strings --git.commit:master --outdir:docs --project --index:on --warningAsError[BrokenLink]:on stack_strings"
+    exec([
+        "nim",
+        "doc",
+        "--git.url:https://github.com/termermc/nim-stack-strings",
+        "--git.commit:master",
+        "--outdir:docs",
+        "--project",
+        "--index:on",
+        "--hint[XCannotRaiseY]:off",
+        "--styleCheck:error",
+        "--warningAsError[BrokenLink]:on",
+        "--hintAsError[XDeclaredButNotUsed]:on",
+        "stack_strings",
+    ].join(" "))
