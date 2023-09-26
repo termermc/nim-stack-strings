@@ -1,6 +1,6 @@
 # Package
 
-version       = "1.1.2"
+version       = "1.1.3"
 author        = "termer"
 description   = "Library for guaranteed zero heap allocation strings"
 license       = "MIT"
@@ -8,7 +8,7 @@ license       = "MIT"
 
 # Dependencies
 
-requires "nim >= 2.0.0"
+requires "nim >= 1.6.14"
 
 task docgen, "Generates documentation into the \"docs\" directory":
     exec([

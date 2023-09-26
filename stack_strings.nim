@@ -363,7 +363,10 @@ template `[]`*(this: StackString, slice: HSlice): openArray[char] =
         let part = str[0..4]
 
         doAssert part == ['H', 'e', 'l', 'l', 'o']
-        doAssert cast[pointer](addr part[0]) == cast[pointer](addr str.data[0])
+        when NimMajor > 1: ## Nim 2.0 no longer requires `unsafeaddr`
+            doAssert part[0].addr == addr str.data[0]
+        else:
+            doAssert part[0].unsafeaddr == unsafeaddr str.data[0]
 
     when stackStringsPreventAllocation:
         {.fatal: "The `[]` template can allocate memory at runtime, see `stackStringsPreventAllocation`".}
@@ -830,9 +833,14 @@ template toCstring*(this: StackString): cstring =
         let cstr = str.toCstring()
 
         doAssert cstr == "Hello world"
-        doAssert cast[pointer](cstr) == addr str.data[0]
-    
-    cast[cstring](addr this.data[0])
+        when NimMajor > 1: ## Nim 2.0 no longer requires `unsafeaddr` 
+            doAssert cstr[0].addr == addr str.data[0]
+        else:
+            doAssert cstr[0].unsafeaddr == unsafeaddr str.data[0]
+    when NimMajor > 1: ## Nim 2.0 no longer requires `unsafeaddr`
+        cast[cstring](addr this.data[0])
+    else:
+        cast[cstring](unsafeaddr this.data[0])
 
 proc toHeapCstring*(this: StackString): cstring {.inline.} =
     ## Allocates a `cstring` on the heap and copies the contents of the [StackString] into it.
@@ -843,7 +851,10 @@ proc toHeapCstring*(this: StackString): cstring {.inline.} =
         let cstr = str.toHeapCstring()
 
         doAssert cstr == "Hello world"
-        doAssert cast[pointer](cstr) != addr str.data[0]
+        when NimMajor > 1: ## Nim 2.0 no longer requires `unsafeaddr`
+            doAssert cstr[0].addr != addr str.data[0]
+        else:
+            doAssert cstr[0].unsafeaddr != unsafeaddr str.data[0]
 
         # You need to deallocate the cstring when you're done with it
         dealloc(cstr)
@@ -855,6 +866,8 @@ proc toHeapCstring*(this: StackString): cstring {.inline.} =
 
     # We don't need a zeroed block of memory because we'll be overwriting it manually
     result = cast[cstring](createU(char, len + 1))
-
-    moveMem(result, addr this.data[0], len)
+    when NimMajor > 1: ## Nim 2.0 no longer requires `unsafeaddr`
+        moveMem(result, addr this.data[0], len)
+    else:
+        moveMem(result, unsafeaddr this.data[0], len)
     result[len] = '\x00'

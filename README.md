@@ -14,4 +14,4 @@ The generated HTML docs will be available in the `docs` directory in the project
 
 # Nim Version Support
 
-Only Nim `2.0.0`+ is supported because the module takes advantage of various type system improvements introduced in `2.0.0`.
+Only Nim `1.6.14`+ is supported as there are bugs with `static int` in prior versions.
