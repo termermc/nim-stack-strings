@@ -816,7 +816,7 @@ template toOpenArray*(this: StackString): untyped =
     ## Converts the [StackString] to `openArray[char]`.
     ## Thanks to ElegantBeef for help on this template.
     
-    this.data.toOpenArray(0, this.len)
+    this.data.toOpenArray(0, this.high)
 
 template toCstring*(this: StackString): cstring =
     ## Converts the [StackString] to `cstring`.
