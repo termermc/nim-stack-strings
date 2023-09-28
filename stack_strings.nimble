@@ -1,6 +1,6 @@
 # Package
 
-version       = "1.1.3"
+version       = "1.1.4"
 author        = "termer"
 description   = "Library for guaranteed zero heap allocation strings"
 license       = "MIT"
