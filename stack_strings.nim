@@ -51,6 +51,18 @@ runnableExamples:
 The resulting [StackString]'s capacity will be the length of the static string provided.
 In the case of the code above, the type of `greeting` is `StackString[13]`.
 
+If you have a runtime string (or anything else that's covered by the [IndexableChars] union type) that you want to convert to a [StackString], you can use [toStackString]:
+]##
+runnableExamples:
+    let someNimString = "The size of this will not be known"
+
+    # A capacity of 64 is more than enough
+    var someSs1 = someNimString.toStackString(64)
+    doAssert someSs1 == ss"The size of this will not be known"
+##[
+
+See also: [unsafeToStackString], [tryToStackString], [toStackStringTruncate].
+
 # Manipulating `StackString` objects
 
 In Nim, `string` is mutable if it is stored in a `var`, as opposed to a `let`. The same applies to [StackString].
@@ -582,7 +594,7 @@ proc tryAdd*(this: var StackString, strOrChar: auto): bool {.inline.} =
 {.boundChecks: on.}
 
 {.boundChecks: off.}
-proc addTruncate*(this: var StackString, strOrChar: auto): bool {.inline.} =
+proc addTruncate*(this: var StackString, strOrChar: auto): bool {.inline, discardable.} =
     ## Appends the provided value to the [StackString].
     ## If the capacity of the StackString is not enough to accomodate the value, the chars that cannot be appended will be truncated.
     ## If the provided value is truncated, `false` will be returned. Otherwise, `true` will be returned.
@@ -871,3 +883,83 @@ proc toHeapCstring*(this: StackString): cstring {.inline.} =
     else:
         moveMem(result, unsafeaddr this.data[0], len)
     result[len] = '\x00'
+
+proc unsafeToStackString*(content: IndexableChars, size: static Natural): StackString[size] {.inline.} =
+    ## Creates a new [StackString] of the specified size using the provided content.
+    ## No capacity checks are performed whatsoever; only use this when you are 100% sure that the content's length is less than or equal to the specified size!
+    runnableExamples:
+        let nimStr = "Some runtime string"
+
+        const maxSize = 32
+
+        # We're already doing a capacity check, so we can use the unsafe version to avoid a redundant check
+        if nimStr.len > maxSize:
+            echo "String is too long!"
+        else:
+            let stackStr = nimStr.unsafeToStackString(maxSize)
+
+            doAssert stackStr.len == nimStr.len
+            
+
+    result = stackStringOfCap(size)
+    result.unsafeAdd(content)
+
+proc toStackString*(content: IndexableChars, size: static Natural): StackString[size] {.inline.} =
+    ## Creates a new [StackString] of the specified size using the provided content.
+    ## If you don't want to raise a defect when the input string exceeds the specified size, use [tryToStackString].
+    ## If you want to truncate the content in the resulting [StackString] if it's too long, use [toStackStringTruncate].
+    runnableExamples:
+        let nimStr = "hi"
+        var stackStr = nimStr.toStackString(10)
+
+        doAssert stackStr.len == 2
+
+        stackStr.add(" world")
+
+        doAssert stackStr.len == 8
+
+        doAssertRaises InsufficientCapacityDefect, stackStr.add(", and everyone in it!")
+
+
+    when stackStringsPreventAllocation:
+        {.fatal: "The `toStackString` proc can allocate memory at runtime, see `stackStringsPreventAllocation`".}
+
+    let len = content.len
+    if len > size:
+        raise newInsufficientCapacityDefect("Tried to create a StackString of size " & $size & ", but the provided content was of size " & $len, size, len)
+
+    return content.unsafeToStackString(size)
+
+proc tryToStackString*(content: IndexableChars, size: static Natural): Option[StackString[size]] {.inline.} =
+    ## Creates a new [StackString] of the specified size using the provided content.
+    ## If the content's length is more than the `size` argument, then None will be returned.
+    ## If you want to raise a defect when the input string exceeds the specified size, use [toStackString].
+    ## If you want to truncate the content in the resulting [StackString] if it's too long, use [toStackStringTruncate].
+    runnableExamples:
+        import std/options
+    
+        let nimStr = "too long very long"
+        let stackStrRes = nimStr.tryToStackString(10)
+
+        doAssert stackStrRes.isNone
+
+        let stackStrRes2 = nimStr.tryToStackString(32)
+
+        doAssert stackStrRes2.isSome
+
+    if content.len > size:
+        return none[StackString[size]]()
+
+    return some content.unsafeToStackString(size)
+
+proc toStackStringTruncate*(content: IndexableChars, size: static Natural): StackString[size] {.inline.} =
+    ## Creates a new [StackString] of the specified size using the provided content.
+    ## If the content length is more than `size`, only the part of the content that can fit in the size will be included, and the rest will be truncated.
+    runnableExamples:
+        let nimStr = "Hello world"
+        let stackStr = nimStr.toStackStringTruncate(5)
+
+        doAssert stackStr == "Hello"
+
+    result = stackStringOfCap(size)
+    result.addTruncate(content)
