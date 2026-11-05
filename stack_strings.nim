@@ -328,7 +328,7 @@ iterator mpairs*(this: var StackString): (int, var char) {.inline.} =
         inc i
 
 {.boundChecks: off.}
-func `[]`*(this: StackString, i: Natural | BackwardsIndex): char {.inline, raises: [IndexDefect].} =
+func `[]`*(this: StackString, i: Natural | BackwardsIndex): char {.inline.} =
     ## Returns the character at the specified index in the [StackString], or raises `IndexDefect` if the index is invalid
     runnableExamples:
         let str = ss"Hello world"
@@ -375,10 +375,10 @@ template `[]`*(this: StackString, slice: HSlice): openArray[char] =
         let part = str[0..4]
 
         doAssert part == ['H', 'e', 'l', 'l', 'o']
-        when NimMajor > 1: ## Nim 2.0 no longer requires `unsafeaddr`
+        when NimMajor > 1: ## Nim 2.0 no longer requires `unsafeAddr`
             doAssert part[0].addr == addr str.data[0]
         else:
-            doAssert part[0].unsafeaddr == unsafeaddr str.data[0]
+            doAssert part[0].unsafeAddr == unsafeAddr str.data[0]
 
     when stackStringsPreventAllocation:
         {.fatal: "The `[]` template can allocate memory at runtime, see `stackStringsPreventAllocation`".}
@@ -445,7 +445,7 @@ func unsafeGet*(this: StackString, i: Natural | BackwardsIndex): char {.inline.}
 {.boundChecks: on.}
 
 {.boundChecks: off.}
-func `[]=`*(this: var StackString, i: Natural | BackwardsIndex, value: char) {.inline, raises: [IndexDefect].} =
+func `[]=`*(this: var StackString, i: Natural | BackwardsIndex, value: char) {.inline.} =
     ## Sets the character at the specified index in the [StackString], or raises `IndexDefect` if the index is invalid
     runnableExamples:
         var str = ss"Hello world"
@@ -639,7 +639,7 @@ proc addTruncate*(this: var StackString, strOrChar: auto): bool {.inline, discar
         this.lenInternal = newLen
 {.boundChecks: on.}
 
-proc add*(this: var StackString, strOrChar: auto) {.inline, raises: [InsufficientCapacityDefect].} =
+proc add*(this: var StackString, strOrChar: auto) {.inline.} =
     ## Appends the provided value to the [StackString].
     ## If there is not enough capacity to accomodate the new value, [InsufficientCapacityDefect] will be raised.
     ## 
@@ -720,7 +720,7 @@ proc trySetLen*(this: var StackString, newLen: Natural | BackwardsIndex, writeZe
 
     return true
 
-proc setLen*(this: var StackString, newLen: Natural | BackwardsIndex, writeZerosOnTruncate: bool = true) {.inline, raises: [InsufficientCapacityDefect].} =
+proc setLen*(this: var StackString, newLen: Natural | BackwardsIndex, writeZerosOnTruncate: bool = true) {.inline.} =
     ## Sets the length of the [StackString] to `newLen`.
     ## If `newLen` is more than the [StackString]'s capacity, [InsufficientCapacityDefect] will be raised.
     ## 
@@ -845,14 +845,14 @@ template toCstring*(this: StackString): cstring =
         let cstr = str.toCstring()
 
         doAssert cstr == "Hello world"
-        when NimMajor > 1: ## Nim 2.0 no longer requires `unsafeaddr` 
+        when NimMajor > 1: ## Nim 2.0 no longer requires `unsafeAddr` 
             doAssert cstr[0].addr == addr str.data[0]
         else:
-            doAssert cstr[0].unsafeaddr == unsafeaddr str.data[0]
-    when NimMajor > 1: ## Nim 2.0 no longer requires `unsafeaddr`
+            doAssert cstr[0].unsafeAddr == unsafeAddr str.data[0]
+    when NimMajor > 1: ## Nim 2.0 no longer requires `unsafeAddr`
         cast[cstring](addr this.data[0])
     else:
-        cast[cstring](unsafeaddr this.data[0])
+        cast[cstring](unsafeAddr this.data[0])
 
 proc toHeapCstring*(this: StackString): cstring {.inline.} =
     ## Allocates a `cstring` on the heap and copies the contents of the [StackString] into it.
@@ -863,10 +863,10 @@ proc toHeapCstring*(this: StackString): cstring {.inline.} =
         let cstr = str.toHeapCstring()
 
         doAssert cstr == "Hello world"
-        when NimMajor > 1: ## Nim 2.0 no longer requires `unsafeaddr`
+        when NimMajor > 1: ## Nim 2.0 no longer requires `unsafeAddr`
             doAssert cstr[0].addr != addr str.data[0]
         else:
-            doAssert cstr[0].unsafeaddr != unsafeaddr str.data[0]
+            doAssert cstr[0].unsafeAddr != unsafeAddr str.data[0]
 
         # You need to deallocate the cstring when you're done with it
         dealloc(cstr)
@@ -878,10 +878,10 @@ proc toHeapCstring*(this: StackString): cstring {.inline.} =
 
     # We don't need a zeroed block of memory because we'll be overwriting it manually
     result = cast[cstring](createU(char, len + 1))
-    when NimMajor > 1: ## Nim 2.0 no longer requires `unsafeaddr`
+    when NimMajor > 1: ## Nim 2.0 no longer requires `unsafeAddr`
         moveMem(result, addr this.data[0], len)
     else:
-        moveMem(result, unsafeaddr this.data[0], len)
+        moveMem(result, unsafeAddr this.data[0], len)
     result[len] = '\x00'
 
 proc unsafeToStackString*(content: IndexableChars, size: static Natural): StackString[size] {.inline.} =

@@ -19,7 +19,6 @@ task docgen, "Generates documentation into the \"docs\" directory":
         "--outdir:docs",
         "--project",
         "--index:on",
-        "--hint[XCannotRaiseY]:off",
         "--styleCheck:error",
         "--warningAsError[BrokenLink]:on",
         "--hintAsError[XDeclaredButNotUsed]:on",
