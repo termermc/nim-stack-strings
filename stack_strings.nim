@@ -151,10 +151,22 @@ template raiseInsufficientCapacityDefect(msg: string, capacity: Natural, request
 
     raise newInsufficientCapacityDefect(msg, capacity, requestedCapacity)
 
+template minLenInternal(size: static Natural): auto =
+    when defined(stackStringsUseInt):
+        int
+    elif size < 127:
+        int8
+    elif size < 32767:
+        int16
+    elif size < 2147483647:
+        int32
+    else:
+        int64
+
 type StackString*[Size: static Natural] = object
     ## A stack-allocated string with a fixed capacity
 
-    lenInternal: Natural
+    lenInternal: minLenInternal(Size)
         ## The current string length
 
     data*: array[Size + 1, char]
@@ -557,7 +569,7 @@ proc unsafeAdd*(this: var StackString, strOrChar: auto) {.inline.} =
         for i in this.len ..< newLen:
             this.data[i] = strOrChar[i - this.len]
         
-        this.lenInternal = newLen
+        this.lenInternal = typeof(this.lenInternal)(newLen)
 {.boundChecks: on.}
 
 {.boundChecks: off.}
@@ -636,7 +648,7 @@ proc addTruncate*(this: var StackString, strOrChar: auto): bool {.inline, discar
         for i in this.len ..< newLen:
             this.data[i] = strOrChar[i - this.len]
         
-        this.lenInternal = newLen
+        this.lenInternal = typeof(this.lenInternal)(newLen)
 {.boundChecks: on.}
 
 proc add*(this: var StackString, strOrChar: auto) {.inline.} =
@@ -692,7 +704,7 @@ proc unsafeSetLen*(this: var StackString, newLen: Natural | BackwardsIndex, writ
             for i in lenRes ..< this.len:
                 this.data[i] = '\x00'
 
-    this.lenInternal = lenRes
+    this.lenInternal = typeof(this.lenInternal)(lenRes)
 {.boundChecks: on.}
 
 proc trySetLen*(this: var StackString, newLen: Natural | BackwardsIndex, writeZerosOnTruncate: bool = true): bool {.inline.} =
